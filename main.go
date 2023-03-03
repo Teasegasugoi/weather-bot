@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
+	"github.com/robfig/cron/v3"
 	"github.com/slack-go/slack"
 )
 
@@ -59,12 +60,21 @@ func init() {
 }
 
 func main() {
+	c := cron.New()
+	c.AddFunc("@every 60m", postWeather)
+	c.Start()
+
+	select {}
+}
+
+func postWeather() {
 	// YahooAPIから天気取得
 	wr, err := fetchWeather()
 	if err != nil {
 		fmt.Println("failed")
 	}
 	text := generateText(wr)
+	fmt.Println(text)
 	c := slack.New(SLACK_TOKEN)
 	// MsgOptionText() の第二引数: 特殊文字をエスケープするかどうか
 	_, _, err = c.PostMessage(CHANNEL_ID, slack.MsgOptionText(text, false))
