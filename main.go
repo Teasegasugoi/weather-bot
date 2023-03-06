@@ -101,46 +101,56 @@ func fetchWeather() (wr *WeatherResponse, err error) {
 投稿フォーマット
 
 	*地点(xxx.xxxxxx,xx.xxxxxx)の2023年03月03日 15時50分から60分間の天気情報*
+
 	```
 	時間      : 降水強度(mm/h)
-	...
-	```
 	xx時xx分  : x.x
-	* しばらく雨は降りません or @channel 60分間の間に雨が降る恐れがあります or しばらく雨が続きます or 60分間の間に雨が止むタイミングがあります
+	xx時xx分  : x.x
+	xx時xx分  : x.x
+	xx時xx分  : x.x
+	xx時xx分  : x.x
+	xx時xx分  : x.x
+	xx時xx分  : x.x
+	```
+
+	雨が降り始める時と雨が1時間の間完全に止む時に, @channelでメンション付きメッセージを送信する
 */
 func generateText(wr *WeatherResponse) string {
 	var text string
+	var rainCount int
 	text += "*" + wr.Feature[0].Name + "*" + "\n"
 	text += "```\n時間      : 降水強度(mm/h)" + "\n"
 	for _, v := range wr.Feature[0].Property.WeatherList.Weather {
 		text += formatDate(v.Date) + "  : " + v.Rainfall.String() + "\n"
 	}
 	text += "```\n"
-	for i, v := range wr.Feature[0].Property.WeatherList.Weather[1:] {
-		if now, err := wr.Feature[0].Property.WeatherList.Weather[0].Rainfall.Float64(); now == 0.0 && err == nil {
-			if n, err := v.Rainfall.Float64(); n > 0.0 {
-				text += "<!channel> 60分間の間に雨が降る恐れがあります"
-				break
-			} else if n == 0.0 {
-				if i == 5 {
-					text += "しばらく雨は降りません"
-				}
-			} else {
-				fmt.Println("Failed to float64 to float64:", err)
-			}
-		} else {
-			if n, err := v.Rainfall.Float64(); n == 0.0 {
-				text += "60分間の間に雨が止むタイミングがあります"
-				break
-			} else if n > 0.0 {
-				if i == 5 {
-					text += "しばらく雨が続きます"
-				}
-			} else {
-				fmt.Println("Failed to float64 to float64:", err)
+	now, _ := wr.Feature[0].Property.WeatherList.Weather[0].Rainfall.Float64()
+	if now == 0 {
+		for _, v := range wr.Feature[0].Property.WeatherList.Weather[1:] {
+			if n, _ := v.Rainfall.Float64(); n > 0.0 {
+				rainCount += 1
 			}
 		}
+		if rainCount > 0 {
+			text += "<!channel> 60分間の間に雨が降る恐れがあります"
+		} else {
+			text += "しばらく雨は降りません"
+		}
+	} else {
+		for _, v := range wr.Feature[0].Property.WeatherList.Weather[1:] {
+			if n, _ := v.Rainfall.Float64(); n > 0.0 {
+				rainCount += 1
+			}
+		}
+		if rainCount == 6 {
+			text += "しばらく雨が続きます"
+		} else if rainCount > 0 {
+			text += "60分間の間に雨が止むタイミングがあります"
+		} else {
+			text += "<!channel> そろそろ雨が止みます"
+		}
 	}
+
 	return text
 }
 
