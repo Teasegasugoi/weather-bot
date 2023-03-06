@@ -51,7 +51,7 @@ var (
 func init() {
 	err := godotenv.Load(".env")
 	if err != nil {
-		fmt.Printf("読み込み出来ませんでした: %v", err)
+		fmt.Println("Failed to load env:", err)
 	}
 	SLACK_TOKEN = os.Getenv("BOT_USER_OAUTH_TOKEN")
 	CHANNEL_ID = os.Getenv("CHANNEL_ID")
@@ -61,25 +61,24 @@ func init() {
 
 func main() {
 	c := cron.New()
-	c.AddFunc("@every 60m", postWeather)
+	c.AddFunc("@every 60m", postToSlack)
 	c.Start()
 
 	select {}
 }
 
-func postWeather() {
+func postToSlack() {
 	// YahooAPIから天気取得
 	wr, err := fetchWeather()
 	if err != nil {
-		fmt.Println("failed")
+		fmt.Println("Failed to fetch weather info from yahoo api:", err)
 	}
 	text := generateText(wr)
-	fmt.Println(text)
 	c := slack.New(SLACK_TOKEN)
-	// MsgOptionText() の第二引数: 特殊文字をエスケープするかどうか
+	// MsgOptionText() 第二引数: 特殊文字をエスケープするかどうか
 	_, _, err = c.PostMessage(CHANNEL_ID, slack.MsgOptionText(text, false))
 	if err != nil {
-		panic(err)
+		fmt.Println("Failed to post message:", err)
 	}
 }
 
@@ -89,6 +88,7 @@ func fetchWeather() (wr *WeatherResponse, err error) {
 	byteArray, _ := io.ReadAll(res.Body)
 	defer res.Body.Close()
 	jsonBytes := ([]byte)(byteArray)
+	fmt.Println(string(jsonBytes))
 	wh := new(WeatherResponse)
 	if err := json.Unmarshal(jsonBytes, wh); err != nil {
 		fmt.Println("JSON Unmarshal error:", err)
@@ -126,7 +126,7 @@ func generateText(wr *WeatherResponse) string {
 					text += "しばらく雨は降りません"
 				}
 			} else {
-				panic(err)
+				fmt.Println("Failed to float64 to float64:", err)
 			}
 		} else {
 			if n, err := v.Rainfall.Float64(); n == 0.0 {
@@ -137,7 +137,7 @@ func generateText(wr *WeatherResponse) string {
 					text += "しばらく雨が続きます"
 				}
 			} else {
-				panic(err)
+				fmt.Println("Failed to float64 to float64:", err)
 			}
 		}
 	}
@@ -148,7 +148,7 @@ func formatDate(d string) string {
 	layout := "200601021504"
 	t, err := time.Parse(layout, d)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("Format error:", err)
 		return ""
 	}
 	return t.Format("15時04分")
