@@ -61,24 +61,32 @@ func init() {
 
 func main() {
 	c := cron.New()
-	c.AddFunc("@every 60m", postToSlack)
+	c.AddFunc("@every 10m", sendToSlack)
 	c.Start()
 
 	select {}
 }
 
-func postToSlack() {
+func sendToSlack() {
 	// YahooAPIから天気取得
 	wr, err := fetchWeather()
 	if err != nil {
 		fmt.Println("Failed to fetch weather info from yahoo api:", err)
 	}
-	text := generateText(wr)
-	c := slack.New(SLACK_TOKEN)
-	// MsgOptionText() 第二引数: 特殊文字をエスケープするかどうか
-	_, _, err = c.PostMessage(CHANNEL_ID, slack.MsgOptionText(text, false))
-	if err != nil {
-		fmt.Println("Failed to post message:", err)
+	if !isSendable(wr) {
+		text := createWeatherTable(wr)
+		now, _ := wr.Feature[0].Property.WeatherList.Weather[0].Rainfall.Float64()
+		if now == 0 {
+			text += "<!channel> 60分間の間に雨が降る恐れがあります"
+		} else {
+			text += "<!channel> 雨が止みます"
+		}
+		c := slack.New(SLACK_TOKEN)
+		// MsgOptionText() 第二引数: 特殊文字をエスケープするかどうか
+		_, _, err = c.PostMessage(CHANNEL_ID, slack.MsgOptionText(text, false))
+		if err != nil {
+			fmt.Println("Failed to post message:", err)
+		}
 	}
 }
 
@@ -112,46 +120,30 @@ func fetchWeather() (wr *WeatherResponse, err error) {
 	xx時xx分  : x.x
 	xx時xx分  : x.x
 	```
-
-	雨が降り始める時と雨が1時間の間完全に止む時に, @channelでメンション付きメッセージを送信する
 */
-func generateText(wr *WeatherResponse) string {
+func createWeatherTable(wr *WeatherResponse) string {
 	var text string
-	var rainCount int
 	text += "*" + wr.Feature[0].Name + "*" + "\n"
 	text += "```\n時間      : 降水強度(mm/h)" + "\n"
 	for _, v := range wr.Feature[0].Property.WeatherList.Weather {
 		text += formatDate(v.Date) + "  : " + v.Rainfall.String() + "\n"
 	}
 	text += "```\n"
+	return text
+}
+
+func isSendable(wr *WeatherResponse) bool {
 	now, _ := wr.Feature[0].Property.WeatherList.Weather[0].Rainfall.Float64()
-	if now == 0 {
-		for _, v := range wr.Feature[0].Property.WeatherList.Weather[1:] {
-			if n, _ := v.Rainfall.Float64(); n > 0.0 {
-				rainCount += 1
-			}
-		}
-		if rainCount > 0 {
-			text += "<!channel> 60分間の間に雨が降る恐れがあります"
-		} else {
-			text += "しばらく雨は降りません"
-		}
-	} else {
-		for _, v := range wr.Feature[0].Property.WeatherList.Weather[1:] {
-			if n, _ := v.Rainfall.Float64(); n > 0.0 {
-				rainCount += 1
-			}
-		}
-		if rainCount == 6 {
-			text += "しばらく雨が続きます"
-		} else if rainCount > 0 {
-			text += "60分間の間に雨が止むタイミングがあります"
-		} else {
-			text += "<!channel> そろそろ雨が止みます"
+	for _, v := range wr.Feature[0].Property.WeatherList.Weather[1:] {
+		if n, _ := v.Rainfall.Float64(); n > 0.0 && now == 0.0 {
+			// 雨が降るパターン
+			return true
+		} else if n > 0.0 && now > 0.0 {
+			return false
 		}
 	}
-
-	return text
+	// 雨が止むかどうか
+	return now > 0.0
 }
 
 func formatDate(d string) string {
