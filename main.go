@@ -73,7 +73,7 @@ func sendToSlack() {
 	if err != nil {
 		fmt.Println("Failed to fetch weather info from yahoo api:", err)
 	}
-	if !isSendable(wr) {
+	if isSendable(wr) {
 		text := createWeatherTable(wr)
 		now, _ := wr.Feature[0].Property.WeatherList.Weather[0].Rainfall.Float64()
 		if now == 0 {
