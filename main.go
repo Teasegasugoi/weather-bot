@@ -77,7 +77,7 @@ func sendToSlack() {
 		text := createWeatherTable(wr)
 		now, _ := wr.Feature[0].Property.WeatherList.Weather[0].Rainfall.Float64()
 		if now == 0 {
-			text += "<!channel> 60分間の間に雨が降る恐れがあります"
+			text += "<!channel> 30分間の間に雨が降る恐れがあります"
 		} else {
 			text += "<!channel> 雨が止みます"
 		}
@@ -123,10 +123,10 @@ func fetchWeather() (wr *WeatherResponse, err error) {
 */
 func createWeatherTable(wr *WeatherResponse) string {
 	var text string
-	text += "*" + wr.Feature[0].Name + "*" + "\n"
+	text += "*" + formatMMddHHmm(wr.Feature[0].Property.WeatherList.Weather[0].Date) + "から30分の天気情報" + "*" + "\n"
 	text += "```\n時間      : 降水強度(mm/h)" + "\n"
-	for _, v := range wr.Feature[0].Property.WeatherList.Weather {
-		text += formatDate(v.Date) + "  : " + v.Rainfall.String() + "\n"
+	for _, v := range wr.Feature[0].Property.WeatherList.Weather[:4] {
+		text += formatHHmm(v.Date) + "  : " + v.Rainfall.String() + "\n"
 	}
 	text += "```\n"
 	return text
@@ -134,7 +134,7 @@ func createWeatherTable(wr *WeatherResponse) string {
 
 func isSendable(wr *WeatherResponse) bool {
 	now, _ := wr.Feature[0].Property.WeatherList.Weather[0].Rainfall.Float64()
-	for _, v := range wr.Feature[0].Property.WeatherList.Weather[1:] {
+	for _, v := range wr.Feature[0].Property.WeatherList.Weather[1:4] {
 		if n, _ := v.Rainfall.Float64(); n > 0.0 && now == 0.0 {
 			// 雨が降るパターン
 			return true
@@ -146,7 +146,7 @@ func isSendable(wr *WeatherResponse) bool {
 	return now > 0.0
 }
 
-func formatDate(d string) string {
+func formatHHmm(d string) string {
 	layout := "200601021504"
 	t, err := time.Parse(layout, d)
 	if err != nil {
@@ -154,4 +154,14 @@ func formatDate(d string) string {
 		return ""
 	}
 	return t.Format("15時04分")
+}
+
+func formatMMddHHmm(d string) string {
+	layout := "200601021504"
+	t, err := time.Parse(layout, d)
+	if err != nil {
+		fmt.Println("Format error:", err)
+		return ""
+	}
+	return t.Format("1月2日15時04分")
 }
